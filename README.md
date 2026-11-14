@@ -59,6 +59,8 @@ let client = rustls::ClientConfig::builder_with_provider(provider)
 Existing custom certificate/attestation verifiers and certificate resolvers
 remain application responsibilities. The provider does not replace trust,
 policy, CRL, EKU, or attestation decisions.
+For `no_std`, use rustls's `builder_with_details` with an application-supplied
+`TimeProvider` rather than the host builder shown above.
 
 For SPDM, call `spdm_crypto_symcrypt::register(clock)` exactly once, before
 **any** SPDM crypto API or session. `clock` returns Unix seconds, or `None` when
