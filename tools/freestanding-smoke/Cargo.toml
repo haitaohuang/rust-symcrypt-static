@@ -1,0 +1,18 @@
+[package]
+name = "freestanding-smoke"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version = "1.88"
+
+[features]
+checked = ["symcrypt-core/checked", "spdm-crypto-symcrypt/checked", "rustls-symcrypt/checked"]
+
+[dependencies]
+symcrypt-core = { path = "../../crates/symcrypt-core", default-features = false, features = ["encoding"] }
+spdm-crypto-symcrypt = { path = "../../crates/spdm-crypto-symcrypt", default-features = false }
+rustls-symcrypt = { path = "../../crates/rustls-symcrypt", default-features = false }
+spdmlib.workspace = true
+rustls.workspace = true
+zeroize.workspace = true

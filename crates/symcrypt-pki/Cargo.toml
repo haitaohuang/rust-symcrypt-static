@@ -1,0 +1,17 @@
+[package]
+name = "symcrypt-pki"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "SymCrypt signature verification algorithms for rustls/webpki"
+
+[features]
+default = ["std"]
+std = ["symcrypt-core/std"]
+checked = ["symcrypt-core/checked"]
+
+[dependencies]
+symcrypt-core = { path = "../symcrypt-core", default-features = false, features = ["encoding"] }
+rustls-pki-types = { version = "1.12.0", default-features = false, features = ["alloc"] }

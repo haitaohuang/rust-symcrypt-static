@@ -1,0 +1,74 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  providers:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        native: [optimized, checked]
+        rust: ["1.88.0", stable]
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_BUILD_JOBS: 2
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: ${{ matrix.rust }}
+          targets: x86_64-unknown-none
+          components: clippy, rustfmt
+      - name: Python reference implementation
+        run: python3 -m pip install --requirement crates/symcrypt-core/tests/requirements.txt
+      - name: Format and lint
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-features --all-targets -- -D warnings
+      - name: Tests, including independent interoperability
+        shell: bash
+        run: |
+          ulimit -c 0
+          features=()
+          if [[ "${{ matrix.native }}" == checked ]]; then
+            features=(--features symcrypt-core/checked)
+          fi
+          cargo test --locked --workspace "${features[@]}" -- --include-ignored
+      - name: Selected dependency closure
+        run: python3 scripts/check-dependencies.py
+      - name: Freestanding final link and execution
+        shell: bash
+        run: |
+          features=()
+          if [[ "${{ matrix.native }}" == checked ]]; then
+            features=(--features checked)
+          fi
+          bash scripts/check-freestanding.sh "${features[@]}"
+          cargo clippy --locked -p freestanding-smoke --target x86_64-unknown-none --release --features checked -- -D warnings
+      - name: Native source remains unmodified
+        run: git -C crates/symcrypt-static-sys/native/SymCrypt diff --exit-code
+
+  core-msrv:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: "1.85.0"
+          targets: x86_64-unknown-none
+      - run: cargo check --locked -p symcrypt-core -p symcrypt-pki -p rustls-symcrypt --all-features
+      - run: cargo check --locked -p symcrypt-core -p symcrypt-pki -p rustls-symcrypt --no-default-features --features symcrypt-core/encoding --target x86_64-unknown-none

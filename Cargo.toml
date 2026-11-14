@@ -1,0 +1,29 @@
+[workspace]
+members = [
+    "crates/symcrypt-static-sys",
+    "crates/symcrypt-core",
+    "crates/symcrypt-pki",
+    "crates/spdm-crypto-symcrypt",
+    "crates/rustls-symcrypt",
+    "tools/freestanding-smoke",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/haitaohuang/rust-symcrypt-static"
+version = "0.1.0"
+
+[workspace.dependencies]
+symcrypt-static-sys = { path = "crates/symcrypt-static-sys" }
+zeroize = { version = "1.8", default-features = false, features = ["alloc"] }
+getrandom = { version = "0.2.16", default-features = false }
+spdmlib = { git = "https://github.com/ccc-spdm-tools/spdm-rs", rev = "2ff535b36d583190efc08d030e648b82ca9b839a", default-features = false, features = ["hashed-transcript-data"] }
+rustls = { version = "=0.23.45", default-features = false, features = ["custom-provider"] }
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1

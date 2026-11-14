@@ -1,0 +1,23 @@
+[package]
+name = "rustls-symcrypt"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "TLS 1.3 AES-256-GCM/P384 rustls provider backed by static SymCrypt"
+
+[features]
+default = ["std"]
+std = ["rustls/std", "symcrypt-core/std"]
+checked = ["symcrypt-core/checked"]
+
+[dependencies]
+symcrypt-core = { path = "../symcrypt-core", default-features = false, features = ["encoding"] }
+symcrypt-pki = { path = "../symcrypt-pki", default-features = false }
+rustls.workspace = true
+spin = { version = "0.9.8", default-features = false, features = ["mutex", "spin_mutex"] }
+zeroize.workspace = true
+
+[dev-dependencies]
+serde_json = "1.0"

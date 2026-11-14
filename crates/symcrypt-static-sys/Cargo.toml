@@ -1,0 +1,12 @@
+[package]
+name = "symcrypt-static-sys"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+links = "symcrypt_static"
+description = "Static native SymCrypt and a narrow opaque-handle C ABI"
+
+[features]
+checked = []
