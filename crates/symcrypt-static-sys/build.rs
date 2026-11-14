@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf, process::Command};
+use std::{env, fs, path::PathBuf, process::Command};
 
 fn run(command: &mut Command) {
     let status = command.status().expect("failed to start native build tool");
@@ -52,16 +52,32 @@ fn main() {
         "--parallel",
         &jobs,
     ]));
-    println!("cargo:rustc-link-search=native={}/lib", build.display());
-    println!(
-        "cargo:rustc-link-search=native={}/symcrypt/lib",
-        build.display()
-    );
+    if target.ends_with("-none") {
+        let isolated = out.join("freestanding-libs");
+        fs::create_dir_all(&isolated).expect("create isolated native archive directory");
+        let objcopy = env::var("OBJCOPY").unwrap_or_else(|_| "objcopy".into());
+        for library in ["symcrypt_bridge", "symcrypt_common", "symcrypt_mlkem"] {
+            // Clang's global guard ignores -mstack-protector-guard-symbol on x86.
+            // Rename only our archive references, never another linked C runtime's.
+            run(Command::new(&objcopy)
+                .arg("--redefine-sym=__stack_chk_guard=symcrypt_rs_stack_chk_guard")
+                .arg("--redefine-sym=__stack_chk_fail=symcrypt_rs_stack_chk_fail")
+                .arg(build.join("lib").join(format!("lib{library}.a")))
+                .arg(isolated.join(format!("lib{library}.a"))));
+        }
+        println!("cargo:rustc-link-search=native={}", isolated.display());
+    } else {
+        println!("cargo:rustc-link-search=native={}/lib", build.display());
+        println!(
+            "cargo:rustc-link-search=native={}/symcrypt/lib",
+            build.display()
+        );
+    }
     for library in ["symcrypt_bridge", "symcrypt_common", "symcrypt_mlkem"] {
         println!("cargo:rustc-link-lib=static={library}");
     }
     println!("cargo:rerun-if-changed=native");
-    for variable in ["CC", "CXX"] {
+    for variable in ["CC", "CXX", "OBJCOPY"] {
         println!("cargo:rerun-if-env-changed={variable}");
     }
 }

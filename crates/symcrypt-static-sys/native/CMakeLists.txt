@@ -15,7 +15,7 @@ set(SYMCRYPT_SYMCRUST OFF CACHE BOOL "" FORCE)
 
 add_compile_options(-ffunction-sections -fdata-sections -fno-builtin-bcmp)
 if(SC_FREESTANDING)
-    # The embedding firmware supplies the global stack guard and failure handler.
+    # build.rs isolates these global guard references from other native runtimes.
     add_compile_options(-ffreestanding -mno-red-zone -mstack-protector-guard=global)
 endif()
 

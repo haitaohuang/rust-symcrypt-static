@@ -42,8 +42,8 @@ bash scripts/check-freestanding.sh
 The default `std` feature supplies a Linux platform using OS entropy. Disable
 default features for firmware, install a `symcrypt_core::platform::Platform`
 with `initialize_with_platform`, and do so **before any cryptography or
-measurement**. The embedding application owns the allocator, panic/fatal
-handlers, and initialized stack-protector guard. See that unsafe initializer's
+measurement**. The embedding application owns the allocator and panic/fatal
+handlers. See that unsafe initializer's
 safety contract; the Linux smoke platform is not suitable for a TD.
 
 Use explicit rustls providers, not ambient defaults:
@@ -85,6 +85,12 @@ only the core host environment.
   entropy bits plus a fresh 128-bit nonce. It seeds a short-lived native AES
   CTR-DRBG; the seed and state are wiped afterward. Callbacks must not re-enter
   initialization or unwind across C.
+- Freestanding initialization also requests 48 entropy bytes to seed its
+  private stack-protector guard before the first native call. Missing entropy
+  or a zero guard fails initialization. Native archive guard/failure references
+  are namespaced, so another linked runtime (such as SGXSSL/QVL) cannot supply
+  an uninitialized guard or have its own guard changed. Stack-protector failure
+  invokes the SymCrypt fatal handler (`0x7374616b`).
 - Public random filling reports failure and wipes output. **Entropy failure
   during native key operations invokes the fatal handler** (`0x726e6766`):
   some upstream arithmetic cannot propagate an RNG callback error. Returning

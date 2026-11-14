@@ -17,6 +17,7 @@ mod freestanding {
         alloc::{GlobalAlloc, Layout},
         arch::{asm, global_asm},
         ptr,
+        sync::atomic::{AtomicU8, Ordering},
     };
     use symcrypt_core::{aead, ecc, hash, hkdf, hmac, platform, random, rsa, Error, Result};
 
@@ -24,6 +25,8 @@ mod freestanding {
         ".global _start",
         "_start:",
         "xor rbp, rbp",
+        "mov rdi, [rsp]",
+        "lea rsi, [rsp + 8]",
         "and rsp, -16",
         "call smoke_main",
         "ud2",
@@ -83,7 +86,17 @@ mod freestanding {
     #[global_allocator]
     static ALLOCATOR: MmapAllocator = MmapAllocator;
 
+    static ENTROPY_MODE: AtomicU8 = AtomicU8::new(0);
+
     fn entropy(mut output: &mut [u8]) -> Result<()> {
+        match ENTROPY_MODE.load(Ordering::Relaxed) {
+            1 => return Err(Error::EntropyUnavailable),
+            2 => {
+                output.fill(0);
+                return Ok(());
+            }
+            _ => {}
+        }
         while !output.is_empty() {
             // SAFETY: getrandom receives an exclusively borrowed writable buffer.
             let result = unsafe {
@@ -115,6 +128,11 @@ mod freestanding {
 
     #[no_mangle]
     static mut __stack_chk_guard: usize = 0;
+
+    extern "C" {
+        static symcrypt_rs_stack_chk_guard: usize;
+        fn symcrypt_rs_stack_chk_fail() -> !;
+    }
 
     #[no_mangle]
     extern "C" fn __stack_chk_fail() -> ! {
@@ -290,15 +308,40 @@ mod freestanding {
     }
 
     #[no_mangle]
-    extern "C" fn smoke_main() -> ! {
-        let mut guard = [0; core::mem::size_of::<usize>()];
-        entropy(&mut guard).unwrap();
-        // SAFETY: single-threaded startup, before entering any stack-protected native code.
-        unsafe {
-            __stack_chk_guard = usize::from_ne_bytes(guard);
-        }
+    extern "C" fn smoke_main(argc: usize, argv: *const *const core::ffi::c_char) -> ! {
+        let mode = if argc > 1 {
+            // SAFETY: Linux supplied argc/argv at the initial process stack.
+            unsafe { core::ffi::CStr::from_ptr(*argv.add(1)) }.to_bytes()
+        } else {
+            b""
+        };
+        ENTROPY_MODE.store(
+            match mode {
+                b"--entropy-failure" => 1,
+                b"--zero-entropy" => 2,
+                _ => 0,
+            },
+            Ordering::Relaxed,
+        );
         // SAFETY: Linux provides the x86_64 ABI/XMM preservation and actual CPUID/OS entropy.
-        unsafe { platform::initialize_with_platform(&PLATFORM) }.unwrap();
+        let initialized = unsafe { platform::initialize_with_platform(&PLATFORM) };
+        if ENTROPY_MODE.load(Ordering::Relaxed) != 0 {
+            assert_eq!(initialized, Err(Error::EntropyUnavailable));
+            assert_eq!(
+                platform::ensure_initialized(),
+                Err(Error::EntropyUnavailable)
+            );
+            exit(0);
+        }
+        initialized.unwrap();
+        // SAFETY: initialization completed and these globals are no longer written.
+        unsafe {
+            assert_eq!(ptr::addr_of!(__stack_chk_guard).read(), 0);
+            assert_ne!(symcrypt_rs_stack_chk_guard, 0);
+            if mode == b"--stack-failure" {
+                symcrypt_rs_stack_chk_fail();
+            }
+        }
         exercise().unwrap();
         exercise_adapters();
         let message =

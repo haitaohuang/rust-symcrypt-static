@@ -17,6 +17,23 @@ pub struct Platform {
 static PLATFORM: AtomicPtr<Platform> = AtomicPtr::new(ptr::null_mut());
 static INITIALIZED: AtomicU8 = AtomicU8::new(0);
 
+#[cfg(target_os = "none")]
+#[no_mangle]
+static mut symcrypt_rs_stack_chk_guard: usize = 0;
+
+#[cfg(target_os = "none")]
+fn initialize_stack_guard(platform: &Platform) -> Result<()> {
+    let mut seed = zeroize::Zeroizing::new([0; 48]);
+    (platform.entropy)(&mut *seed)?;
+    let guard = usize::from_ne_bytes(seed[..8].try_into().map_err(|_| Error::InvalidLength)?);
+    if guard == 0 {
+        return Err(Error::EntropyUnavailable);
+    }
+    // SAFETY: only the sole initializer writes this, before any native C call.
+    unsafe { ptr::addr_of_mut!(symcrypt_rs_stack_chk_guard).write(guard) };
+    Ok(())
+}
+
 /// Installs the embedding environment once. Reinstalling the same instance is idempotent.
 ///
 /// # Safety
@@ -27,6 +44,9 @@ static INITIALIZED: AtomicU8 = AtomicU8::new(0);
 /// must not re-enter initialization and no callback may unwind through C.
 /// Entropy failure inside native key operations invokes `fatal`, because some
 /// native arithmetic paths cannot propagate RNG errors.
+/// Freestanding initialization requests 48 entropy bytes to seed its private
+/// stack guard before running native hash self-tests. It does not initialize a
+/// DRBG or modify another linked C runtime's stack guard.
 pub unsafe fn initialize_with_platform(platform: &'static Platform) -> Result<()> {
     let pointer = ptr::from_ref(platform).cast_mut();
     match PLATFORM.compare_exchange(
@@ -70,6 +90,11 @@ pub fn ensure_initialized() -> Result<()> {
                     INITIALIZED.store(3, Ordering::Release);
                     return Err(Error::UnsupportedPlatform);
                 }
+                #[cfg(target_os = "none")]
+                if let Err(error) = initialize_stack_guard(platform) {
+                    INITIALIZED.store(4, Ordering::Release);
+                    return Err(error);
+                }
                 // SAFETY: platform is installed, CPU prerequisites checked, and this is
                 // the sole initializer. Hash self-tests do not call the entropy callback.
                 unsafe { sys::sc_init() };
@@ -78,6 +103,7 @@ pub fn ensure_initialized() -> Result<()> {
             }
             Err(2) => return Ok(()),
             Err(3) => return Err(Error::UnsupportedPlatform),
+            Err(4) => return Err(Error::EntropyUnavailable),
             Err(_) => core::hint::spin_loop(),
         }
     }
@@ -171,6 +197,12 @@ extern "C" fn symcrypt_rs_fatal(code: u32) -> ! {
     loop {
         core::hint::spin_loop();
     }
+}
+
+#[cfg(target_os = "none")]
+#[no_mangle]
+extern "C" fn symcrypt_rs_stack_chk_fail() -> ! {
+    symcrypt_rs_fatal(0x7374616b)
 }
 
 #[no_mangle]
