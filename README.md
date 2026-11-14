@@ -22,7 +22,8 @@ RSA signature parameters. Every FIPS-reporting interface returns `false`.
 Native SymCrypt is unmodified and pinned to
 `286762b7730e2b780678f5ab11fef2b1bad639e0`. SPDM is pinned to
 `ccc-spdm-tools/spdm-rs@2ff535b36d583190efc08d030e648b82ca9b839a`;
-rustls is pinned to `0.23.45`.
+rustls requires `0.23.46` or a compatible patched release; the tested revision
+is recorded in `Cargo.lock`.
 
 ## Build and use
 

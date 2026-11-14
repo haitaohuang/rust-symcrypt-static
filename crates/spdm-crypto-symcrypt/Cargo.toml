@@ -20,7 +20,7 @@ spin = { version = "0.9.8", default-features = false, features = ["mutex", "spin
 zeroize.workspace = true
 der = { version = "0.7.10", default-features = false, features = ["alloc"] }
 rustls-pki-types = { version = "1.12.0", default-features = false, features = ["alloc"] }
-webpki = { package = "rustls-webpki", version = "0.103.15", default-features = false, features = ["alloc"] }
+webpki = { package = "rustls-webpki", version = "0.103.17", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 codec = { git = "https://github.com/ccc-spdm-tools/spdm-rs", rev = "2ff535b36d583190efc08d030e648b82ca9b839a" }
